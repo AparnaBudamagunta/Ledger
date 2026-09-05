@@ -30,7 +30,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}
 th{color:var(--muted);font-weight:600;text-transform:uppercase;font-size:11px;letter-spacing:.3px}
 th,td{padding:9px 8px;border-bottom:1px solid var(--border);text-align:right}
 th:first-child,td:first-child{text-align:left}
-.row{display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr;gap:10px}
+.row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
 .filterRow{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;max-width:340px}
 .topbar{display:flex;justify-content:flex-end;gap:8px;margin-bottom:14px}
 .small{padding:6px 12px;font-size:12px;background:var(--accent-soft);color:var(--accent-dark);border-radius:6px}
@@ -81,6 +81,10 @@ tr.fundrow:hover{background:var(--accent-soft)}
       <input id="fundName" placeholder="e.g. Parag Parikh Flexi Cap">
     </div>
     <div>
+      <label>Folio Number</label>
+      <input id="folioNumber" placeholder="e.g. 12345678">
+    </div>
+    <div>
       <label>Type</label>
       <select id="txnType" onchange="updateLabels()">
         <option value="buy">Buy</option>
@@ -124,10 +128,41 @@ tr.fundrow:hover{background:var(--accent-soft)}
   <button onclick="addNav()">Add Rate</button>
 </div>
 
+<div class="card edit-only">
+  <h2>Fund Name / Folio Update</h2>
+  <div class="row">
+    <div>
+      <label>Select Fund</label>
+      <select id="changeFundSelect"></select>
+    </div>
+    <div>
+      <label>New Fund Name</label>
+      <input id="newFundName" placeholder="Leave blank to keep same">
+    </div>
+    <div>
+      <label>New Folio Number</label>
+      <input id="newFundFolio" placeholder="Leave blank to keep same">
+    </div>
+    <div>
+      <label>Effective Date</label>
+      <input id="changeDate" type="date">
+    </div>
+  </div>
+  <button onclick="applyFundChange()">Apply Update</button>
+</div>
+
+<div class="card">
+  <h2>Fund Change Log</h2>
+  <table>
+    <thead><tr><th>Fund (Current)</th><th>Previous Name</th><th>Previous Folio</th><th>New Name</th><th>New Folio</th><th>Effective Date</th></tr></thead>
+    <tbody id="changeLogBody"></tbody>
+  </table>
+</div>
+
 <div class="card">
   <h2>NAV History &amp; Valuation</h2>
   <table>
-    <thead><tr><th>Fund</th><th>Latest Date</th><th>Latest Rate (₹)</th><th>Units</th><th>Avg Cost/Unit (₹)</th><th>Current Value (₹)</th><th>Cost Price (₹)</th><th>P&amp;L per Unit (₹)</th><th>P&amp;L Total (₹)</th></tr></thead>
+    <thead><tr><th>Fund</th><th>Folio</th><th>Latest Date</th><th>Latest Rate (₹)</th><th>Units</th><th>Avg Cost/Unit (₹)</th><th>Current Value (₹)</th><th>Cost Price (₹)</th><th>P&amp;L per Unit (₹)</th><th>P&amp;L Total (₹)</th></tr></thead>
     <tbody id="navBody"></tbody>
   </table>
 </div>
@@ -135,7 +170,7 @@ tr.fundrow:hover{background:var(--accent-soft)}
 <div class="card">
   <h2>Holdings Summary (click a fund for history)</h2>
   <table id="summaryTable">
-    <thead><tr><th>Fund</th><th>Total Purchased Units</th><th>Total Sold Units</th><th>Total Cost Price (₹)</th><th>Total Sold Price (₹)</th></tr></thead>
+    <thead><tr><th>Fund</th><th>Folio</th><th>Total Purchased Units</th><th>Total Sold Units</th><th>Total Cost Price (₹)</th><th>Total Sold Price (₹)</th></tr></thead>
     <tbody></tbody>
   </table>
 </div>
@@ -173,7 +208,7 @@ tr.fundrow:hover{background:var(--accent-soft)}
     </div>
   </div>
   <table style="margin-top:16px">
-    <thead><tr><th>Fund</th><th>Purchased Units</th><th>Sold Units</th><th>Cost Price (₹)</th><th>Sold Price (₹)</th></tr></thead>
+    <thead><tr><th>Fund</th><th>Folio</th><th>Purchased Units</th><th>Sold Units</th><th>Cost Price (₹)</th><th>Sold Price (₹)</th></tr></thead>
     <tbody id="overviewFundBody"></tbody>
   </table>
 </div>
@@ -210,7 +245,7 @@ tr.fundrow:hover{background:var(--accent-soft)}
 </div>
 
 <script>
-let data = { transactions: [], navHistory: [] };
+let data = { transactions: [], navHistory: [], fundGroups: [] };
 const KEY = "mf_transactions";
 let expandedFund = null;
 let overviewExpandedFund = null;
@@ -234,22 +269,39 @@ function applyRole(){
   switchTab('funds');
 }
 
+async function storageGet(key){
+  if(window.storage && typeof window.storage.get === 'function'){
+    try{ const r = await window.storage.get(key, false); if(r) return r; }catch(e){}
+  }
+  const raw = localStorage.getItem(key);
+  return raw ? {value: raw} : null;
+}
+
+async function storageSet(key, value){
+  if(window.storage && typeof window.storage.set === 'function'){
+    try{ await window.storage.set(key, value, false); return; }catch(e){}
+  }
+  localStorage.setItem(key, value);
+}
+
 async function load(){
   try{
-    const r = await window.storage.get(KEY, false);
+    const r = await storageGet(KEY);
     if(r && r.value) data = JSON.parse(r.value);
   }catch(e){ data = { transactions: [], navHistory: [] }; }
   if(!data.navHistory) data.navHistory = [];
+  if(!data.fundGroups) data.fundGroups = [];
   data.transactions.forEach(t => { if(!t.id) t.id = genId(); });
   data.navHistory.forEach(n => { if(!n.id) n.id = genId(); });
   document.getElementById('txnDate').valueAsDate = new Date();
   document.getElementById('navDate').valueAsDate = new Date();
+  document.getElementById('changeDate').valueAsDate = new Date();
   updateLabels();
   render();
 }
 
 async function save(){
-  await window.storage.set(KEY, JSON.stringify(data), false);
+  await storageSet(KEY, JSON.stringify(data));
 }
 
 function updateLabels(){
@@ -270,19 +322,93 @@ function updateCalc(){
 
 function addTxn(){
   const fund = document.getElementById('fundName').value.trim();
+  const folio = document.getElementById('folioNumber').value.trim();
   const type = document.getElementById('txnType').value;
   const units = parseFloat(document.getElementById('units').value);
   const pricePerUnit = parseFloat(document.getElementById('pricePerUnit').value) || 0;
   const date = document.getElementById('txnDate').value || new Date().toISOString().slice(0,10);
   if(!fund || !units){ showModal('Please enter fund name and units.', [{label:'OK', onClick:()=>{}}]); return; }
   const total = units * pricePerUnit;
-  data.transactions.push({id: genId(), fund, type, units, pricePerUnit, total, date});
+  data.transactions.push({id: genId(), fund, folio, type, units, pricePerUnit, total, date});
   save();
   render();
   document.getElementById('fundName').value='';
+  document.getElementById('folioNumber').value='';
   document.getElementById('units').value='';
   document.getElementById('pricePerUnit').value='';
   updateCalc();
+}
+
+function resolveFundKey(name, folio){
+  const n = (name||'').trim().toLowerCase();
+  const f = (folio||'').trim();
+  for(const g of data.fundGroups){
+    for(const h of g.history){
+      const hn = (h.name||'').trim().toLowerCase();
+      const hf = (h.folio||'').trim();
+      if((f && hf && hf===f) || (n && hn && hn===n)) return g.id;
+    }
+  }
+  return null;
+}
+
+function getFundKey(item){
+  return resolveFundKey(item.fund, item.folio) || item.fund;
+}
+
+function getFundDisplay(key){
+  const g = data.fundGroups.find(x=>x.id===key);
+  if(g){
+    const last = g.history[g.history.length-1];
+    return {name: last.name, folio: last.folio || ''};
+  }
+  const matches = data.transactions.filter(t=>getFundKey(t)===key).sort((a,b)=>a.date.localeCompare(b.date));
+  const latestFolio = matches.length ? (matches[matches.length-1].folio || '') : '';
+  return {name: key, folio: latestFolio};
+}
+
+function populateFundChangeDropdown(){
+  const sel = document.getElementById('changeFundSelect');
+  const current = sel.value;
+  const keys = Array.from(new Set(data.transactions.map(t=>getFundKey(t))));
+  sel.innerHTML = keys.map(k=>{
+    const d = getFundDisplay(k);
+    return `<option value="${k}">${d.name}${d.folio ? ' (Folio: '+d.folio+')' : ''}</option>`;
+  }).join('');
+  if(keys.includes(current)) sel.value = current;
+}
+
+function applyFundChange(){
+  const key = document.getElementById('changeFundSelect').value;
+  if(!key){ showModal('No fund available to update yet.', [{label:'OK', onClick:()=>{}}]); return; }
+  const disp = getFundDisplay(key);
+  const newName = document.getElementById('newFundName').value.trim() || disp.name;
+  const newFolio = document.getElementById('newFundFolio').value.trim() || disp.folio;
+  const date = document.getElementById('changeDate').value || new Date().toISOString().slice(0,10);
+  if(newName === disp.name && newFolio === disp.folio){ showModal('No change entered — new name/folio match the current values.', [{label:'OK', onClick:()=>{}}]); return; }
+  let group = data.fundGroups.find(g=>g.id===key);
+  if(!group){
+    const earliest = data.transactions.filter(t=>getFundKey(t)===key).sort((a,b)=>a.date.localeCompare(b.date))[0];
+    group = {id: genId(), history: [{name: disp.name, folio: disp.folio, date: earliest ? earliest.date : date}]};
+    data.fundGroups.push(group);
+  }
+  group.history.push({name: newName, folio: newFolio, date});
+  save();
+  render();
+  document.getElementById('newFundName').value = '';
+  document.getElementById('newFundFolio').value = '';
+}
+
+function renderFundChangeLog(){
+  const body = document.getElementById('changeLogBody');
+  body.innerHTML = '';
+  data.fundGroups.forEach(g=>{
+    const current = g.history[g.history.length-1].name;
+    for(let i=1;i<g.history.length;i++){
+      const prev = g.history[i-1], cur = g.history[i];
+      body.innerHTML += `<tr><td>${current}</td><td>${prev.name}</td><td>${prev.folio||'-'}</td><td>${cur.name}</td><td>${cur.folio||'-'}</td><td>${cur.date}</td></tr>`;
+    }
+  });
 }
 
 function genId(){
@@ -299,13 +425,14 @@ function deleteTxn(id){
 function computeSummary(txns){
   const summary = {};
   txns.forEach(t=>{
-    if(!summary[t.fund]) summary[t.fund] = {purchasedUnits:0, soldUnits:0, costPrice:0, soldPrice:0};
+    const key = getFundKey(t);
+    if(!summary[key]) summary[key] = {purchasedUnits:0, soldUnits:0, costPrice:0, soldPrice:0};
     if(t.type === 'buy' || t.type === 'dividend'){
-      summary[t.fund].purchasedUnits += t.units;
-      summary[t.fund].costPrice += t.total;
+      summary[key].purchasedUnits += t.units;
+      summary[key].costPrice += t.total;
     } else if(t.type === 'sell'){
-      summary[t.fund].soldUnits += t.units;
-      summary[t.fund].soldPrice += t.total;
+      summary[key].soldUnits += t.units;
+      summary[key].soldPrice += t.total;
     }
   });
   return summary;
@@ -339,17 +466,18 @@ function renderOverview(){
   const summary = computeSummary(txns);
   const body = document.getElementById('overviewFundBody');
   body.innerHTML = '';
-  Object.keys(summary).forEach(fund=>{
-    const s = summary[fund];
+  Object.keys(summary).forEach(key=>{
+    const s = summary[key];
+    const disp = getFundDisplay(key);
     const tr = document.createElement('tr');
     tr.className = 'fundrow';
-    tr.innerHTML = `<td>${fund}</td><td>${s.purchasedUnits.toFixed(3)}</td><td>${s.soldUnits.toFixed(3)}</td><td>${s.costPrice.toFixed(2)}</td><td>${s.soldPrice.toFixed(2)}</td>`;
-    tr.onclick = () => { overviewExpandedFund = (overviewExpandedFund === fund) ? null : fund; renderOverview(); };
+    tr.innerHTML = `<td>${disp.name}</td><td>${disp.folio||'-'}</td><td>${s.purchasedUnits.toFixed(3)}</td><td>${s.soldUnits.toFixed(3)}</td><td>${s.costPrice.toFixed(2)}</td><td>${s.soldPrice.toFixed(2)}</td>`;
+    tr.onclick = () => { overviewExpandedFund = (overviewExpandedFund === key) ? null : key; renderOverview(); };
     body.appendChild(tr);
-    if(overviewExpandedFund === fund){
+    if(overviewExpandedFund === key){
       const trh = document.createElement('tr');
       trh.className = 'history';
-      const ftxns = txns.filter(t=>t.fund===fund).sort((a,b)=>a.date.localeCompare(b.date));
+      const ftxns = txns.filter(t=>getFundKey(t)===key).sort((a,b)=>a.date.localeCompare(b.date));
       let h = `<table style="width:100%"><thead><tr><th>Date</th><th>Type</th><th>Units</th><th>Price/Unit</th><th>Cost Price</th><th>Sold Price</th></tr></thead><tbody>`;
       ftxns.forEach(t=>{
         const c = (t.type==='buy'||t.type==='dividend') ? t.total.toFixed(2) : '-';
@@ -358,7 +486,7 @@ function renderOverview(){
       });
       h += '</tbody></table>';
       const td = document.createElement('td');
-      td.colSpan = 5;
+      td.colSpan = 6;
       td.innerHTML = h;
       trh.appendChild(td);
       body.appendChild(trh);
@@ -369,9 +497,12 @@ function renderOverview(){
 function populateNavFundDropdown(){
   const sel = document.getElementById('navFund');
   const current = sel.value;
-  const funds = Array.from(new Set(data.transactions.map(t=>t.fund)));
-  sel.innerHTML = funds.map(f=>`<option value="${f}">${f}</option>`).join('');
-  if(funds.includes(current)) sel.value = current;
+  const keys = Array.from(new Set(data.transactions.map(t=>getFundKey(t))));
+  sel.innerHTML = keys.map(k=>{
+    const d = getFundDisplay(k);
+    return `<option value="${k}">${d.name}${d.folio ? ' (Folio: '+d.folio+')' : ''}</option>`;
+  }).join('');
+  if(keys.includes(current)) sel.value = current;
 }
 
 function showModal(msg, buttons){
@@ -394,10 +525,11 @@ function addNav(){
   const rate = parseFloat(document.getElementById('navRate').value);
   const date = document.getElementById('navDate').value || new Date().toISOString().slice(0,10);
   if(!fund || !rate){ showModal('Please select a fund and enter a rate.', [{label:'OK', onClick:()=>{}}]); return; }
+  const displayName = getFundDisplay(fund).name;
   const ym = date.slice(0,7);
   const monthMatches = data.navHistory
     .map((n, i) => ({...n, i}))
-    .filter(n => n.fund.trim().toLowerCase()===fund.trim().toLowerCase() && n.date.slice(0,7)===ym);
+    .filter(n => getFundKey(n)===fund && n.date.slice(0,7)===ym);
   let existingIdx = -1;
   const onOrBefore = monthMatches.filter(n => n.date <= date);
   if(onOrBefore.length){
@@ -409,7 +541,7 @@ function addNav(){
   if(existingIdx !== -1){
     const existingDate = data.navHistory[existingIdx].date;
     const existingRate = data.navHistory[existingIdx].rate;
-    showModal(`A rate is already added for ${fund} for this month (₹${existingRate} on ${existingDate}). Update that entry, or add a new record?`, [
+    showModal(`A rate is already added for ${displayName} for this month (₹${existingRate} on ${existingDate}). Update that entry, or add a new record?`, [
       {label:'Add New Record', secondary:true, onClick: ()=>{ data.navHistory.push({id: genId(), fund, rate, date}); finish(); }},
       {label:'Update Existing', onClick: ()=>{ data.navHistory[existingIdx] = {...data.navHistory[existingIdx], rate, date}; finish(); }}
     ]);
@@ -426,9 +558,9 @@ function deleteNav(id){
   ]);
 }
 
-function unitsAndCostAsOf(fund, date){
+function unitsAndCostAsOf(fundKey, date){
   let units = 0, cost = 0;
-  data.transactions.filter(t=>t.fund===fund && t.date<=date).forEach(t=>{
+  data.transactions.filter(t=>getFundKey(t)===fundKey && t.date<=date).forEach(t=>{
     if(t.type==='buy'||t.type==='dividend'){ units += t.units; cost += t.total; }
     else if(t.type==='sell'){ units -= t.units; }
   });
@@ -438,8 +570,11 @@ function unitsAndCostAsOf(fund, date){
 function populateTrendDropdowns(){
   const fundSel = document.getElementById('trendFund');
   const curF = fundSel.value;
-  const funds = Array.from(new Set(data.transactions.map(t=>t.fund)));
-  fundSel.innerHTML = '<option value="">All Funds (Portfolio)</option>' + funds.map(f=>`<option value="${f}">${f}</option>`).join('');
+  const funds = Array.from(new Set(data.transactions.map(t=>getFundKey(t))));
+  fundSel.innerHTML = '<option value="">All Funds (Portfolio)</option>' + funds.map(k=>{
+    const d = getFundDisplay(k);
+    return `<option value="${k}">${d.name}${d.folio ? ' (Folio: '+d.folio+')' : ''}</option>`;
+  }).join('');
   if(funds.includes(curF)) fundSel.value = curF;
 
   const yearSel = document.getElementById('trendYear');
@@ -458,7 +593,7 @@ function portfolioValueAt(funds, dateStr, metric){
     if(metric === 'cost'){
       sum += unitsAndCostAsOf(f, dateStr).cost;
     } else {
-      const entries = data.navHistory.filter(n=>n.fund===f && n.date<=dateStr).sort((a,b)=>a.date.localeCompare(b.date));
+      const entries = data.navHistory.filter(n=>getFundKey(n)===f && n.date<=dateStr).sort((a,b)=>a.date.localeCompare(b.date));
       if(entries.length){
         sum += unitsAndCostAsOf(f, dateStr).units * entries[entries.length-1].rate;
       }
@@ -493,7 +628,7 @@ function renderTrend(){
   const metric = document.getElementById('trendMetric').value;
   const fund = document.getElementById('trendFund').value;
   const year = document.getElementById('trendYear').value;
-  const funds = fund ? [fund] : Array.from(new Set(data.transactions.map(t=>t.fund)));
+  const funds = fund ? [fund] : Array.from(new Set(data.transactions.map(t=>getFundKey(t))));
   let labels = [], values = [];
   if(year){
     const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -518,9 +653,10 @@ function renderTrend(){
 function renderNav(){
   const body = document.getElementById('navBody');
   body.innerHTML = '';
-  const funds = Array.from(new Set(data.navHistory.map(n=>n.fund)));
+  const funds = Array.from(new Set(data.navHistory.map(n=>getFundKey(n))));
   funds.forEach(fund=>{
-    const entries = data.navHistory.filter(n=>n.fund===fund).sort((a,b)=>a.date.localeCompare(b.date));
+    const disp = getFundDisplay(fund);
+    const entries = data.navHistory.filter(n=>getFundKey(n)===fund).sort((a,b)=>a.date.localeCompare(b.date));
     const latest = entries[entries.length-1];
     const {units, cost} = unitsAndCostAsOf(fund, latest.date);
     const value = units * latest.rate;
@@ -531,7 +667,7 @@ function renderNav(){
     const plColor = plTotal >= 0 ? '#2e7d32' : '#c62828';
     const tr = document.createElement('tr');
     tr.className = 'fundrow';
-    tr.innerHTML = `<td>${fund}</td><td>${latest.date}</td><td>${latest.rate.toFixed(2)}</td><td>${units.toFixed(3)}</td><td>${avgCost.toFixed(2)}</td><td style="color:${color};font-weight:600">${value.toFixed(2)}</td><td>${cost.toFixed(2)}</td><td style="color:${plColor};font-weight:600">${plUnit.toFixed(2)}</td><td style="color:${plColor};font-weight:600">${plTotal.toFixed(2)}</td>`;
+    tr.innerHTML = `<td>${disp.name}</td><td>${disp.folio||'-'}</td><td>${latest.date}</td><td>${latest.rate.toFixed(2)}</td><td>${units.toFixed(3)}</td><td>${avgCost.toFixed(2)}</td><td style="color:${color};font-weight:600">${value.toFixed(2)}</td><td>${cost.toFixed(2)}</td><td style="color:${plColor};font-weight:600">${plUnit.toFixed(2)}</td><td style="color:${plColor};font-weight:600">${plTotal.toFixed(2)}</td>`;
     tr.onclick = () => { navExpandedFund = (navExpandedFund === fund) ? null : fund; renderNav(); };
     body.appendChild(tr);
     if(navExpandedFund === fund){
@@ -550,7 +686,7 @@ function renderNav(){
       });
       h += '</tbody></table>';
       const td = document.createElement('td');
-      td.colSpan = 9;
+      td.colSpan = 10;
       td.innerHTML = h;
       trh.appendChild(td);
       body.appendChild(trh);
@@ -567,16 +703,17 @@ function render(){
   tbody.innerHTML = '';
   Object.keys(summary).forEach(fund=>{
     const s = summary[fund];
+    const disp = getFundDisplay(fund);
     const trFund = document.createElement('tr');
     trFund.className = 'fundrow';
-    trFund.innerHTML = `<td>${fund}</td><td>${s.purchasedUnits.toFixed(3)}</td><td>${s.soldUnits.toFixed(3)}</td><td>${s.costPrice.toFixed(2)}</td><td>${s.soldPrice.toFixed(2)}</td>`;
+    trFund.innerHTML = `<td>${disp.name}</td><td>${disp.folio||'-'}</td><td>${s.purchasedUnits.toFixed(3)}</td><td>${s.soldUnits.toFixed(3)}</td><td>${s.costPrice.toFixed(2)}</td><td>${s.soldPrice.toFixed(2)}</td>`;
     trFund.onclick = () => { expandedFund = (expandedFund === fund) ? null : fund; render(); };
     tbody.appendChild(trFund);
 
     if(expandedFund === fund){
       const trHist = document.createElement('tr');
       trHist.className = 'history';
-      const txns = data.transactions.filter(t=>t.fund===fund).sort((a,b)=>a.date.localeCompare(b.date));
+      const txns = data.transactions.filter(t=>getFundKey(t)===fund).sort((a,b)=>a.date.localeCompare(b.date));
       let histHtml = `<table style="width:100%"><thead><tr>
         <th>Date</th><th>Type</th><th>Units</th><th>Price/Unit</th><th>Cost Price</th><th>Sold Price</th><th class="edit-only">Action</th>
       </tr></thead><tbody>`;
@@ -587,7 +724,7 @@ function render(){
       });
       histHtml += '</tbody></table>';
       const td = document.createElement('td');
-      td.colSpan = 5;
+      td.colSpan = 6;
       td.innerHTML = histHtml;
       trHist.appendChild(td);
       tbody.appendChild(trHist);
@@ -597,6 +734,8 @@ function render(){
   renderOverview();
   populateNavFundDropdown();
   renderNav();
+  populateFundChangeDropdown();
+  renderFundChangeLog();
   applyRoleVisibility();
 }
 
