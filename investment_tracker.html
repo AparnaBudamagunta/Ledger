@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Investment Tracker</title>
+<style>
+:root{
+  --bg:#f7f3ec;
+  --card:#fffdfa;
+  --border:#e8ddcd;
+  --text:#4a4237;
+  --muted:#948a78;
+  --accent:#a9895f;
+  --accent-dark:#8a6c45;
+  --accent-soft:#f1e6d3;
+  --header:#8a6c45;
+}
+body{font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--text);margin:0;padding:24px}
+.tabs{display:flex;gap:8px;margin-bottom:20px}
+.tab{padding:8px 18px;background:var(--accent-soft);border-radius:8px;cursor:pointer;color:var(--accent-dark);font-weight:500}
+.tab.active{background:var(--accent-dark);color:#fff}
+.card{background:var(--card);border-radius:12px;padding:18px 20px;margin-bottom:20px;box-shadow:0 1px 4px rgba(0,0,0,0.05);border:1px solid var(--border)}
+h2{margin-top:0;font-size:15px;color:var(--accent-dark);font-weight:600;letter-spacing:.2px}
+label{display:block;font-size:12px;margin:8px 0 4px;color:var(--muted)}
+input,select{width:100%;padding:8px;border-radius:7px;border:1px solid var(--border);background:#fcfdfc;color:var(--text);box-sizing:border-box}
+input:focus,select:focus{outline:none;border-color:var(--accent)}
+button{margin-top:12px;padding:10px 18px;border:none;border-radius:7px;background:var(--accent-dark);color:white;cursor:pointer;font-weight:600}
+button:hover{background:var(--header)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{color:var(--muted);font-weight:600;text-transform:uppercase;font-size:11px;letter-spacing:.3px}
+th,td{padding:9px 8px;border-bottom:1px solid var(--border);text-align:right}
+th:first-child,td:first-child{text-align:left}
+.row{display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr;gap:10px}
+.filterRow{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;max-width:340px}
+.topbar{display:flex;justify-content:flex-end;gap:8px;margin-bottom:14px}
+.small{padding:6px 12px;font-size:12px;background:var(--accent-soft);color:var(--accent-dark);border-radius:6px}
+tr.fundrow{cursor:pointer}
+tr.fundrow:hover{background:var(--accent-soft)}
+.history{background:#fafbfa}
+.calc{font-size:12px;color:var(--muted);margin-top:6px}
+.overviewGrid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:6px}
+.stat{background:var(--accent-soft);border-radius:10px;padding:14px 16px}
+.stat .label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.3px}
+.stat .value{font-size:20px;font-weight:700;color:var(--accent-dark);margin-top:4px}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <button class="small" onclick="exportBackup()">Export Backup</button>
+  <input type="file" id="importFile" style="display:none" onchange="importBackup(event)">
+  <button class="small" onclick="document.getElementById('importFile').click()">Import Backup</button>
+</div>
+
+<div class="tabs">
+  <div class="tab active" id="tabRoleBtn" onclick="switchTab('role')">Role</div>
+  <div class="tab" id="tabFundsBtn" onclick="switchTab('funds')">Mutual Funds</div>
+</div>
+
+<div id="roleTabContent" class="card">
+  <h2>Select Role</h2>
+  <div class="row" style="grid-template-columns:1fr">
+    <div>
+      <label>Role</label>
+      <select id="roleSelect">
+        <option value="edit">Edit (add &amp; view everything)</option>
+        <option value="view">View (view-only blocks)</option>
+      </select>
+    </div>
+  </div>
+  <button onclick="applyRole()">Continue</button>
+</div>
+
+<div id="fundsTabContent" style="display:none">
+
+<div class="card edit-only">
+  <h2>Add Transaction</h2>
+  <div class="row">
+    <div>
+      <label>Fund Name</label>
+      <input id="fundName" placeholder="e.g. Parag Parikh Flexi Cap">
+    </div>
+    <div>
+      <label>Type</label>
+      <select id="txnType" onchange="updateLabels()">
+        <option value="buy">Buy</option>
+        <option value="sell">Sell</option>
+        <option value="dividend">Dividend Credit (units)</option>
+      </select>
+    </div>
+    <div>
+      <label>Units</label>
+      <input id="units" type="number" step="any" placeholder="Units" oninput="updateCalc()">
+    </div>
+    <div>
+      <label id="priceLabel">Cost Price (per unit ₹)</label>
+      <input id="pricePerUnit" type="number" step="any" placeholder="Price per unit" oninput="updateCalc()">
+    </div>
+    <div>
+      <label>Transaction Date</label>
+      <input id="txnDate" type="date">
+    </div>
+  </div>
+  <div class="calc" id="calcDisplay"></div>
+  <button onclick="addTxn()">Add</button>
+</div>
+
+<div class="card edit-only">
+  <h2>Add Unit Rate (NAV)</h2>
+  <div class="row" style="grid-template-columns:1fr 1fr 1fr">
+    <div>
+      <label>Fund</label>
+      <select id="navFund"></select>
+    </div>
+    <div>
+      <label>Unit Price (₹)</label>
+      <input id="navRate" type="number" step="any" placeholder="Current rate">
+    </div>
+    <div>
+      <label>As on Date</label>
+      <input id="navDate" type="date">
+    </div>
+  </div>
+  <button onclick="addNav()">Add Rate</button>
+</div>
+
+<div class="card">
+  <h2>NAV History &amp; Valuation</h2>
+  <table>
+    <thead><tr><th>Fund</th><th>Latest Date</th><th>Latest Rate (₹)</th><th>Units</th><th>Avg Cost/Unit (₹)</th><th>Current Value (₹)</th><th>Cost Price (₹)</th><th>P&amp;L per Unit (₹)</th><th>P&amp;L Total (₹)</th></tr></thead>
+    <tbody id="navBody"></tbody>
+  </table>
+</div>
+
+<div class="card">
+  <h2>Holdings Summary (click a fund for history)</h2>
+  <table id="summaryTable">
+    <thead><tr><th>Fund</th><th>Total Purchased Units</th><th>Total Sold Units</th><th>Total Cost Price (₹)</th><th>Total Sold Price (₹)</th></tr></thead>
+    <tbody></tbody>
+  </table>
+</div>
+
+<div class="card">
+  <h2>Period Overview</h2>
+  <div class="filterRow">
+    <div>
+      <label>Month</label>
+      <select id="filterMonth" onchange="renderOverview()">
+        <option value="">All Months</option>
+        <option value="1">January</option><option value="2">February</option>
+        <option value="3">March</option><option value="4">April</option>
+        <option value="5">May</option><option value="6">June</option>
+        <option value="7">July</option><option value="8">August</option>
+        <option value="9">September</option><option value="10">October</option>
+        <option value="11">November</option><option value="12">December</option>
+      </select>
+    </div>
+    <div>
+      <label>Year</label>
+      <select id="filterYear" onchange="renderOverview()">
+        <option value="">All Years</option>
+      </select>
+    </div>
+  </div>
+  <div class="overviewGrid">
+    <div class="stat">
+      <div class="label">Total Cost Price</div>
+      <div class="value" id="overviewCost">₹0.00</div>
+    </div>
+    <div class="stat">
+      <div class="label">Total Sold Price</div>
+      <div class="value" id="overviewSold">₹0.00</div>
+    </div>
+  </div>
+  <table style="margin-top:16px">
+    <thead><tr><th>Fund</th><th>Purchased Units</th><th>Sold Units</th><th>Cost Price (₹)</th><th>Sold Price (₹)</th></tr></thead>
+    <tbody id="overviewFundBody"></tbody>
+  </table>
+</div>
+
+<div class="card">
+  <h2>Value Trend</h2>
+  <div class="row" style="grid-template-columns:1fr 1fr 1fr">
+    <div>
+      <label>Metric</label>
+      <select id="trendMetric" onchange="renderTrend()">
+        <option value="cost">Cost Price</option>
+        <option value="current">Current Price</option>
+      </select>
+    </div>
+    <div>
+      <label>Fund</label>
+      <select id="trendFund" onchange="renderTrend()"><option value="">All Funds (Portfolio)</option></select>
+    </div>
+    <div>
+      <label>Year</label>
+      <select id="trendYear" onchange="renderTrend()"><option value="">All Years</option></select>
+    </div>
+  </div>
+  <div id="trendChartContainer" style="margin-top:14px"></div>
+</div>
+
+</div>
+
+<div id="modalOverlay" style="display:none;position:fixed;inset:0;background:rgba(74,66,55,0.35);align-items:center;justify-content:center;z-index:50">
+  <div style="background:#fffdfa;border-radius:12px;padding:22px 24px;max-width:360px;box-shadow:0 6px 24px rgba(0,0,0,0.15)">
+    <div id="modalMsg" style="font-size:14px;margin-bottom:16px;color:#4a4237"></div>
+    <div id="modalBtns" style="display:flex;gap:10px;justify-content:flex-end"></div>
+  </div>
+</div>
+
+<script>
+let data = { transactions: [], navHistory: [] };
+const KEY = "mf_transactions";
+let expandedFund = null;
+let overviewExpandedFund = null;
+let navExpandedFund = null;
+let currentRole = 'edit';
+
+function switchTab(tab){
+  document.getElementById('roleTabContent').style.display = tab==='role' ? 'block' : 'none';
+  document.getElementById('fundsTabContent').style.display = tab==='funds' ? 'block' : 'none';
+  document.getElementById('tabRoleBtn').classList.toggle('active', tab==='role');
+  document.getElementById('tabFundsBtn').classList.toggle('active', tab==='funds');
+}
+
+function applyRoleVisibility(){
+  document.querySelectorAll('.edit-only').forEach(el => el.style.display = currentRole==='edit' ? '' : 'none');
+}
+
+function applyRole(){
+  currentRole = document.getElementById('roleSelect').value;
+  applyRoleVisibility();
+  switchTab('funds');
+}
+
+async function load(){
+  try{
+    const r = await window.storage.get(KEY, false);
+    if(r && r.value) data = JSON.parse(r.value);
+  }catch(e){ data = { transactions: [], navHistory: [] }; }
+  if(!data.navHistory) data.navHistory = [];
+  data.transactions.forEach(t => { if(!t.id) t.id = genId(); });
+  data.navHistory.forEach(n => { if(!n.id) n.id = genId(); });
+  document.getElementById('txnDate').valueAsDate = new Date();
+  document.getElementById('navDate').valueAsDate = new Date();
+  updateLabels();
+  render();
+}
+
+async function save(){
+  await window.storage.set(KEY, JSON.stringify(data), false);
+}
+
+function updateLabels(){
+  const type = document.getElementById('txnType').value;
+  const lbl = document.getElementById('priceLabel');
+  if(type === 'buy') lbl.textContent = 'Cost Price (per unit ₹)';
+  else if(type === 'sell') lbl.textContent = 'Selling Price (per unit ₹)';
+  else lbl.textContent = 'Cost Price (per unit ₹) - optional';
+  updateCalc();
+}
+
+function updateCalc(){
+  const units = parseFloat(document.getElementById('units').value) || 0;
+  const price = parseFloat(document.getElementById('pricePerUnit').value) || 0;
+  const total = units * price;
+  document.getElementById('calcDisplay').textContent = total ? `Total: ₹${total.toFixed(2)}` : '';
+}
+
+function addTxn(){
+  const fund = document.getElementById('fundName').value.trim();
+  const type = document.getElementById('txnType').value;
+  const units = parseFloat(document.getElementById('units').value);
+  const pricePerUnit = parseFloat(document.getElementById('pricePerUnit').value) || 0;
+  const date = document.getElementById('txnDate').value || new Date().toISOString().slice(0,10);
+  if(!fund || !units){ showModal('Please enter fund name and units.', [{label:'OK', onClick:()=>{}}]); return; }
+  const total = units * pricePerUnit;
+  data.transactions.push({id: genId(), fund, type, units, pricePerUnit, total, date});
+  save();
+  render();
+  document.getElementById('fundName').value='';
+  document.getElementById('units').value='';
+  document.getElementById('pricePerUnit').value='';
+  updateCalc();
+}
+
+function genId(){
+  return Date.now().toString(36) + Math.random().toString(36).slice(2,8);
+}
+
+function deleteTxn(id){
+  showModal('Delete this transaction? This cannot be undone.', [
+    {label:'Cancel', secondary:true, onClick:()=>{}},
+    {label:'Delete', onClick:()=>{ data.transactions = data.transactions.filter(t=>t.id!==id); save(); render(); }}
+  ]);
+}
+
+function computeSummary(txns){
+  const summary = {};
+  txns.forEach(t=>{
+    if(!summary[t.fund]) summary[t.fund] = {purchasedUnits:0, soldUnits:0, costPrice:0, soldPrice:0};
+    if(t.type === 'buy' || t.type === 'dividend'){
+      summary[t.fund].purchasedUnits += t.units;
+      summary[t.fund].costPrice += t.total;
+    } else if(t.type === 'sell'){
+      summary[t.fund].soldUnits += t.units;
+      summary[t.fund].soldPrice += t.total;
+    }
+  });
+  return summary;
+}
+
+function populateYears(){
+  const yearSelect = document.getElementById('filterYear');
+  const current = yearSelect.value;
+  const years = new Set(data.transactions.map(t => t.date.slice(0,4)));
+  yearSelect.innerHTML = '<option value="">All Years</option>';
+  Array.from(years).sort().reverse().forEach(y=>{
+    yearSelect.innerHTML += `<option value="${y}">${y}</option>`;
+  });
+  if(years.has(current)) yearSelect.value = current;
+}
+
+function renderOverview(){
+  const month = document.getElementById('filterMonth').value;
+  const year = document.getElementById('filterYear').value;
+  let txns = data.transactions;
+  if(year) txns = txns.filter(t => t.date.slice(0,4) === year);
+  if(month) txns = txns.filter(t => parseInt(t.date.slice(5,7),10) === parseInt(month,10));
+  let cost = 0, sold = 0;
+  txns.forEach(t=>{
+    if(t.type === 'buy' || t.type === 'dividend') cost += t.total;
+    else if(t.type === 'sell') sold += t.total;
+  });
+  document.getElementById('overviewCost').textContent = '₹' + cost.toFixed(2);
+  document.getElementById('overviewSold').textContent = '₹' + sold.toFixed(2);
+
+  const summary = computeSummary(txns);
+  const body = document.getElementById('overviewFundBody');
+  body.innerHTML = '';
+  Object.keys(summary).forEach(fund=>{
+    const s = summary[fund];
+    const tr = document.createElement('tr');
+    tr.className = 'fundrow';
+    tr.innerHTML = `<td>${fund}</td><td>${s.purchasedUnits.toFixed(3)}</td><td>${s.soldUnits.toFixed(3)}</td><td>${s.costPrice.toFixed(2)}</td><td>${s.soldPrice.toFixed(2)}</td>`;
+    tr.onclick = () => { overviewExpandedFund = (overviewExpandedFund === fund) ? null : fund; renderOverview(); };
+    body.appendChild(tr);
+    if(overviewExpandedFund === fund){
+      const trh = document.createElement('tr');
+      trh.className = 'history';
+      const ftxns = txns.filter(t=>t.fund===fund).sort((a,b)=>a.date.localeCompare(b.date));
+      let h = `<table style="width:100%"><thead><tr><th>Date</th><th>Type</th><th>Units</th><th>Price/Unit</th><th>Cost Price</th><th>Sold Price</th></tr></thead><tbody>`;
+      ftxns.forEach(t=>{
+        const c = (t.type==='buy'||t.type==='dividend') ? t.total.toFixed(2) : '-';
+        const sd = (t.type==='sell') ? t.total.toFixed(2) : '-';
+        h += `<tr><td style="text-align:left">${t.date}</td><td style="text-align:left">${t.type}</td><td>${t.units.toFixed(3)}</td><td>${t.pricePerUnit.toFixed(2)}</td><td>${c}</td><td>${sd}</td></tr>`;
+      });
+      h += '</tbody></table>';
+      const td = document.createElement('td');
+      td.colSpan = 5;
+      td.innerHTML = h;
+      trh.appendChild(td);
+      body.appendChild(trh);
+    }
+  });
+}
+
+function populateNavFundDropdown(){
+  const sel = document.getElementById('navFund');
+  const current = sel.value;
+  const funds = Array.from(new Set(data.transactions.map(t=>t.fund)));
+  sel.innerHTML = funds.map(f=>`<option value="${f}">${f}</option>`).join('');
+  if(funds.includes(current)) sel.value = current;
+}
+
+function showModal(msg, buttons){
+  document.getElementById('modalMsg').textContent = msg;
+  const btnBox = document.getElementById('modalBtns');
+  btnBox.innerHTML = '';
+  buttons.forEach(b=>{
+    const btn = document.createElement('button');
+    btn.textContent = b.label;
+    btn.style.marginTop = '0';
+    if(b.secondary){ btn.style.background = '#e8ddcd'; btn.style.color = '#4a4237'; }
+    btn.onclick = () => { document.getElementById('modalOverlay').style.display = 'none'; b.onClick(); };
+    btnBox.appendChild(btn);
+  });
+  document.getElementById('modalOverlay').style.display = 'flex';
+}
+
+function addNav(){
+  const fund = document.getElementById('navFund').value;
+  const rate = parseFloat(document.getElementById('navRate').value);
+  const date = document.getElementById('navDate').value || new Date().toISOString().slice(0,10);
+  if(!fund || !rate){ showModal('Please select a fund and enter a rate.', [{label:'OK', onClick:()=>{}}]); return; }
+  const ym = date.slice(0,7);
+  const monthMatches = data.navHistory
+    .map((n, i) => ({...n, i}))
+    .filter(n => n.fund.trim().toLowerCase()===fund.trim().toLowerCase() && n.date.slice(0,7)===ym);
+  let existingIdx = -1;
+  const onOrBefore = monthMatches.filter(n => n.date <= date);
+  if(onOrBefore.length){
+    existingIdx = onOrBefore.reduce((a,b)=> b.date > a.date ? b : a).i;
+  } else if(monthMatches.length){
+    existingIdx = monthMatches.reduce((a,b)=> b.date < a.date ? b : a).i;
+  }
+  const finish = () => { save(); renderNav(); document.getElementById('navRate').value=''; };
+  if(existingIdx !== -1){
+    const existingDate = data.navHistory[existingIdx].date;
+    const existingRate = data.navHistory[existingIdx].rate;
+    showModal(`A rate is already added for ${fund} for this month (₹${existingRate} on ${existingDate}). Update that entry, or add a new record?`, [
+      {label:'Add New Record', secondary:true, onClick: ()=>{ data.navHistory.push({id: genId(), fund, rate, date}); finish(); }},
+      {label:'Update Existing', onClick: ()=>{ data.navHistory[existingIdx] = {...data.navHistory[existingIdx], rate, date}; finish(); }}
+    ]);
+  } else {
+    data.navHistory.push({id: genId(), fund, rate, date});
+    finish();
+  }
+}
+
+function deleteNav(id){
+  showModal('Delete this rate entry? This cannot be undone.', [
+    {label:'Cancel', secondary:true, onClick:()=>{}},
+    {label:'Delete', onClick:()=>{ data.navHistory = data.navHistory.filter(n=>n.id!==id); save(); renderNav(); }}
+  ]);
+}
+
+function unitsAndCostAsOf(fund, date){
+  let units = 0, cost = 0;
+  data.transactions.filter(t=>t.fund===fund && t.date<=date).forEach(t=>{
+    if(t.type==='buy'||t.type==='dividend'){ units += t.units; cost += t.total; }
+    else if(t.type==='sell'){ units -= t.units; }
+  });
+  return {units, cost};
+}
+
+function populateTrendDropdowns(){
+  const fundSel = document.getElementById('trendFund');
+  const curF = fundSel.value;
+  const funds = Array.from(new Set(data.transactions.map(t=>t.fund)));
+  fundSel.innerHTML = '<option value="">All Funds (Portfolio)</option>' + funds.map(f=>`<option value="${f}">${f}</option>`).join('');
+  if(funds.includes(curF)) fundSel.value = curF;
+
+  const yearSel = document.getElementById('trendYear');
+  const curY = yearSel.value;
+  const years = new Set();
+  data.transactions.forEach(t=>years.add(t.date.slice(0,4)));
+  data.navHistory.forEach(n=>years.add(n.date.slice(0,4)));
+  const yearList = Array.from(years).sort().reverse();
+  yearSel.innerHTML = '<option value="">All Years</option>' + yearList.map(y=>`<option value="${y}">${y}</option>`).join('');
+  if(yearList.includes(curY)) yearSel.value = curY;
+}
+
+function portfolioValueAt(funds, dateStr, metric){
+  let sum = 0;
+  funds.forEach(f=>{
+    if(metric === 'cost'){
+      sum += unitsAndCostAsOf(f, dateStr).cost;
+    } else {
+      const entries = data.navHistory.filter(n=>n.fund===f && n.date<=dateStr).sort((a,b)=>a.date.localeCompare(b.date));
+      if(entries.length){
+        sum += unitsAndCostAsOf(f, dateStr).units * entries[entries.length-1].rate;
+      }
+    }
+  });
+  return sum;
+}
+
+function drawLineChart(containerId, labels, values){
+  const container = document.getElementById(containerId);
+  if(!labels.length){ container.innerHTML = '<div style="color:var(--muted);font-size:13px">No data to display yet.</div>'; return; }
+  const w = 640, h = 220, padL = 55, padR = 20, padT = 16, padB = 30;
+  const maxV = Math.max(...values, 0), minV = Math.min(...values, 0);
+  const range = (maxV - minV) || 1;
+  const stepX = (w - padL - padR) / Math.max(labels.length - 1, 1);
+  const pts = values.map((v,i)=>[padL + i*stepX, padT + (h-padT-padB) * (1 - (v-minV)/range)]);
+  let svg = `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto">`;
+  svg += `<line x1="${padL}" y1="${padT}" x2="${padL}" y2="${h-padB}" stroke="#e8ddcd"/>`;
+  svg += `<line x1="${padL}" y1="${h-padB}" x2="${w-padR}" y2="${h-padB}" stroke="#e8ddcd"/>`;
+  svg += `<polyline points="${pts.map(p=>p.join(',')).join(' ')}" fill="none" stroke="#8a6c45" stroke-width="2.5"/>`;
+  pts.forEach((p,i)=>{
+    svg += `<circle cx="${p[0]}" cy="${p[1]}" r="3.5" fill="#fffdfa" stroke="#8a6c45" stroke-width="2"><title>${labels[i]}: ₹${values[i].toFixed(2)}</title></circle>`;
+    svg += `<text x="${p[0]}" y="${h-padB+16}" font-size="10" fill="#948a78" text-anchor="middle">${labels[i]}</text>`;
+  });
+  svg += `<text x="${padL-6}" y="${padT+4}" font-size="10" fill="#948a78" text-anchor="end">₹${maxV.toFixed(0)}</text>`;
+  svg += `<text x="${padL-6}" y="${h-padB}" font-size="10" fill="#948a78" text-anchor="end">₹${minV.toFixed(0)}</text>`;
+  svg += `</svg>`;
+  container.innerHTML = svg;
+}
+
+function renderTrend(){
+  const metric = document.getElementById('trendMetric').value;
+  const fund = document.getElementById('trendFund').value;
+  const year = document.getElementById('trendYear').value;
+  const funds = fund ? [fund] : Array.from(new Set(data.transactions.map(t=>t.fund)));
+  let labels = [], values = [];
+  if(year){
+    const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    for(let m=1;m<=12;m++){
+      const lastDay = new Date(parseInt(year,10), m, 0).getDate();
+      const dateStr = `${year}-${String(m).padStart(2,'0')}-${String(lastDay).padStart(2,'0')}`;
+      labels.push(monthNames[m-1]);
+      values.push(portfolioValueAt(funds, dateStr, metric));
+    }
+  } else {
+    const years = new Set();
+    data.transactions.forEach(t=>years.add(t.date.slice(0,4)));
+    data.navHistory.forEach(n=>years.add(n.date.slice(0,4)));
+    Array.from(years).sort().forEach(y=>{
+      labels.push(y);
+      values.push(portfolioValueAt(funds, `${y}-12-31`, metric));
+    });
+  }
+  drawLineChart('trendChartContainer', labels, values);
+}
+
+function renderNav(){
+  const body = document.getElementById('navBody');
+  body.innerHTML = '';
+  const funds = Array.from(new Set(data.navHistory.map(n=>n.fund)));
+  funds.forEach(fund=>{
+    const entries = data.navHistory.filter(n=>n.fund===fund).sort((a,b)=>a.date.localeCompare(b.date));
+    const latest = entries[entries.length-1];
+    const {units, cost} = unitsAndCostAsOf(fund, latest.date);
+    const value = units * latest.rate;
+    const color = value >= cost ? '#2e7d32' : '#c62828';
+    const avgCost = units ? cost/units : 0;
+    const plUnit = latest.rate - avgCost;
+    const plTotal = value - cost;
+    const plColor = plTotal >= 0 ? '#2e7d32' : '#c62828';
+    const tr = document.createElement('tr');
+    tr.className = 'fundrow';
+    tr.innerHTML = `<td>${fund}</td><td>${latest.date}</td><td>${latest.rate.toFixed(2)}</td><td>${units.toFixed(3)}</td><td>${avgCost.toFixed(2)}</td><td style="color:${color};font-weight:600">${value.toFixed(2)}</td><td>${cost.toFixed(2)}</td><td style="color:${plColor};font-weight:600">${plUnit.toFixed(2)}</td><td style="color:${plColor};font-weight:600">${plTotal.toFixed(2)}</td>`;
+    tr.onclick = () => { navExpandedFund = (navExpandedFund === fund) ? null : fund; renderNav(); };
+    body.appendChild(tr);
+    if(navExpandedFund === fund){
+      const trh = document.createElement('tr');
+      trh.className = 'history';
+      let h = `<table style="width:100%"><thead><tr><th>Date</th><th>Rate (₹)</th><th>Units</th><th>Avg Cost/Unit (₹)</th><th>Current Value (₹)</th><th>Cost Price (₹)</th><th>P&amp;L per Unit (₹)</th><th>P&amp;L Total (₹)</th><th class="edit-only">Action</th></tr></thead><tbody>`;
+      entries.forEach(n=>{
+        const uc = unitsAndCostAsOf(fund, n.date);
+        const v = uc.units * n.rate;
+        const c = v >= uc.cost ? '#2e7d32' : '#c62828';
+        const avgC = uc.units ? uc.cost/uc.units : 0;
+        const plU = n.rate - avgC;
+        const plT = v - uc.cost;
+        const plC = plT >= 0 ? '#2e7d32' : '#c62828';
+        h += `<tr><td style="text-align:left">${n.date}</td><td>${n.rate.toFixed(2)}</td><td>${uc.units.toFixed(3)}</td><td>${avgC.toFixed(2)}</td><td style="color:${c};font-weight:600">${v.toFixed(2)}</td><td>${uc.cost.toFixed(2)}</td><td style="color:${plC};font-weight:600">${plU.toFixed(2)}</td><td style="color:${plC};font-weight:600">${plT.toFixed(2)}</td><td class="edit-only"><button class="small edit-only" style="margin:0;color:#a13a3a" onclick="event.stopPropagation();deleteNav('${n.id}')">Delete</button></td></tr>`;
+      });
+      h += '</tbody></table>';
+      const td = document.createElement('td');
+      td.colSpan = 9;
+      td.innerHTML = h;
+      trh.appendChild(td);
+      body.appendChild(trh);
+    }
+  });
+  applyRoleVisibility();
+  populateTrendDropdowns();
+  renderTrend();
+}
+
+function render(){
+  const summary = computeSummary(data.transactions);
+  const tbody = document.querySelector('#summaryTable tbody');
+  tbody.innerHTML = '';
+  Object.keys(summary).forEach(fund=>{
+    const s = summary[fund];
+    const trFund = document.createElement('tr');
+    trFund.className = 'fundrow';
+    trFund.innerHTML = `<td>${fund}</td><td>${s.purchasedUnits.toFixed(3)}</td><td>${s.soldUnits.toFixed(3)}</td><td>${s.costPrice.toFixed(2)}</td><td>${s.soldPrice.toFixed(2)}</td>`;
+    trFund.onclick = () => { expandedFund = (expandedFund === fund) ? null : fund; render(); };
+    tbody.appendChild(trFund);
+
+    if(expandedFund === fund){
+      const trHist = document.createElement('tr');
+      trHist.className = 'history';
+      const txns = data.transactions.filter(t=>t.fund===fund).sort((a,b)=>a.date.localeCompare(b.date));
+      let histHtml = `<table style="width:100%"><thead><tr>
+        <th>Date</th><th>Type</th><th>Units</th><th>Price/Unit</th><th>Cost Price</th><th>Sold Price</th><th class="edit-only">Action</th>
+      </tr></thead><tbody>`;
+      txns.forEach(t=>{
+        const cost = (t.type==='buy'||t.type==='dividend') ? t.total.toFixed(2) : '-';
+        const sold = (t.type==='sell') ? t.total.toFixed(2) : '-';
+        histHtml += `<tr><td style="text-align:left">${t.date}</td><td style="text-align:left">${t.type}</td><td>${t.units.toFixed(3)}</td><td>${t.pricePerUnit.toFixed(2)}</td><td>${cost}</td><td>${sold}</td><td class="edit-only"><button class="small edit-only" style="margin:0;color:#a13a3a" onclick="event.stopPropagation();deleteTxn('${t.id}')">Delete</button></td></tr>`;
+      });
+      histHtml += '</tbody></table>';
+      const td = document.createElement('td');
+      td.colSpan = 5;
+      td.innerHTML = histHtml;
+      trHist.appendChild(td);
+      tbody.appendChild(trHist);
+    }
+  });
+  populateYears();
+  renderOverview();
+  populateNavFundDropdown();
+  renderNav();
+  applyRoleVisibility();
+}
+
+function exportBackup(){
+  const blob = new Blob([JSON.stringify(data,null,2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'investment_backup_' + new Date().toISOString().slice(0,10) + '.json';
+  a.click();
+}
+
+function importBackup(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev){
+    try{
+      data = JSON.parse(ev.target.result);
+      save();
+      render();
+    }catch(err){ showModal('Invalid backup file.', [{label:'OK', onClick:()=>{}}]); }
+  };
+  reader.readAsText(file);
+}
+
+load();
+</script>
+</body>
+</html>
