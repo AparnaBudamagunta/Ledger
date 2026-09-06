@@ -38,6 +38,7 @@ tr.fundrow{cursor:pointer}
 tr.fundrow:hover{background:var(--accent-soft)}
 .history{background:#fafbfa}
 .calc{font-size:12px;color:var(--muted);margin-top:6px}
+.help{font-size:11.5px;color:var(--muted);margin:-6px 0 14px;line-height:1.5}
 .overviewGrid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:6px}
 .stat{background:var(--accent-soft);border-radius:10px;padding:14px 16px}
 .stat .label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.3px}
@@ -55,10 +56,12 @@ tr.fundrow:hover{background:var(--accent-soft)}
 <div class="tabs">
   <div class="tab active" id="tabRoleBtn" onclick="switchTab('role')">Role</div>
   <div class="tab" id="tabFundsBtn" onclick="switchTab('funds')">Mutual Funds</div>
+  <div class="tab" id="tabProjectedBtn" onclick="switchTab('projected')">Mutual Funds Projected</div>
 </div>
 
 <div id="roleTabContent" class="card">
   <h2>Select Role</h2>
+  <div class="help">Edit: shows all add/edit/update blocks. View: hides add/edit blocks, shows only read-only summaries.</div>
   <div class="row" style="grid-template-columns:1fr">
     <div>
       <label>Role</label>
@@ -75,6 +78,7 @@ tr.fundrow:hover{background:var(--accent-soft)}
 
 <div class="card edit-only">
   <h2>Add Transaction</h2>
+  <div class="help">Log one buy/sell/dividend event. Buy: price = cost/unit paid. Sell: price = selling price/unit (doesn't change your cost basis). Dividend: extra units credited, cost/unit optional.</div>
   <div class="row">
     <div>
       <label>Fund Name</label>
@@ -115,6 +119,7 @@ tr.fundrow:hover{background:var(--accent-soft)}
 
 <div class="card edit-only">
   <h2>Add Unit Rate (NAV)</h2>
+  <div class="help">Record the market rate for a fund on a given date — used to value your holdings and compute P&amp;L. One rate per fund per month recommended.</div>
   <div class="row" style="grid-template-columns:1fr 1fr 1fr">
     <div>
       <label>Fund</label>
@@ -134,6 +139,7 @@ tr.fundrow:hover{background:var(--accent-soft)}
 
 <div class="card edit-only">
   <h2>Fund Name / Folio / ISIN Update</h2>
+  <div class="help">Use when a fund is renamed or your folio/ISIN changes. Links old and new records so all tables show them as one fund under the latest name.</div>
   <div class="row">
     <div>
       <label>Select Fund</label>
@@ -161,6 +167,7 @@ tr.fundrow:hover{background:var(--accent-soft)}
 
 <div class="card">
   <h2>Fund Change Log</h2>
+  <div class="help">Audit trail of every name/folio/ISIN change applied above.</div>
   <table>
     <thead><tr><th>Fund (Current)</th><th>Previous Name</th><th>Previous Folio</th><th>Previous ISIN</th><th>New Name</th><th>New Folio</th><th>New ISIN</th><th>Effective Date</th></tr></thead>
     <tbody id="changeLogBody"></tbody>
@@ -169,6 +176,7 @@ tr.fundrow:hover{background:var(--accent-soft)}
 
 <div class="card">
   <h2>NAV History &amp; Valuation</h2>
+  <div class="help">One row per fund (latest rate). Click to expand full rate history. Current Value = units × rate; P&amp;L = value vs. cost as of that date.</div>
   <table>
     <thead><tr><th>Fund</th><th>Folio</th><th>ISIN</th><th>Latest Date</th><th>Latest Rate (₹)</th><th>Units</th><th>Avg Cost/Unit (₹)</th><th>Current Value (₹)</th><th>Cost Price (₹)</th><th>P&amp;L per Unit (₹)</th><th>P&amp;L Total (₹)</th></tr></thead>
     <tbody id="navBody"></tbody>
@@ -177,6 +185,7 @@ tr.fundrow:hover{background:var(--accent-soft)}
 
 <div class="card">
   <h2>Holdings Summary (click a fund for history)</h2>
+  <div class="help">All-time totals per fund, regardless of date. Click a row to see every transaction for that fund.</div>
   <table id="summaryTable">
     <thead><tr><th>Fund</th><th>Folio</th><th>ISIN</th><th>Total Purchased Units</th><th>Total Sold Units</th><th>Total Cost Price (₹)</th><th>Total Sold Price (₹)</th></tr></thead>
     <tbody></tbody>
@@ -185,6 +194,7 @@ tr.fundrow:hover{background:var(--accent-soft)}
 
 <div class="card">
   <h2>Period Overview</h2>
+  <div class="help">Pick Year (+ optional Month) to see totals for just that period. Leave both blank for all-time.</div>
   <div class="filterRow">
     <div>
       <label>Month</label>
@@ -223,12 +233,14 @@ tr.fundrow:hover{background:var(--accent-soft)}
 
 <div class="card">
   <h2>Value Trend</h2>
+  <div class="help">Line chart of value over time. Cost Price = money invested; NAV-based Value = units × NAV for that month; NAV Rate = the fund's raw rate only (isolates fund performance from your buying activity — requires a single fund selected). No fund = whole portfolio (rate option excluded).</div>
   <div class="row" style="grid-template-columns:1fr 1fr 1fr">
     <div>
       <label>Metric</label>
       <select id="trendMetric" onchange="renderTrend()">
         <option value="cost">Cost Price</option>
-        <option value="current">Current Price</option>
+        <option value="current">NAV-based Value</option>
+        <option value="rate">NAV Rate (fund only)</option>
       </select>
     </div>
     <div>
@@ -245,6 +257,65 @@ tr.fundrow:hover{background:var(--accent-soft)}
 
 </div>
 
+<div id="projectedTabContent" style="display:none">
+
+<div class="card">
+  <h2>Mutual Funds Projected</h2>
+  <div class="help">Invested Till = which transactions to include (snapshot cutoff). Projected Year/Month = the date you're valuing as of (drives growth &amp; NAV lookup). Assumed Return % is per fund, editable.</div>
+  <div class="row">
+    <div>
+      <label>Fund</label>
+      <select id="projFund" onchange="onProjFundChange()"></select>
+    </div>
+    <div>
+      <label>Assumed Annual Return (%)</label>
+      <input id="projRate" type="number" step="any" onchange="saveProjRate()">
+    </div>
+    <div>
+      <label>Invested Till — Year</label>
+      <select id="projInvestedYear" onchange="onProjInvestedYearChange()"><option value="">Till Date (all transactions)</option></select>
+    </div>
+    <div>
+      <label>Invested Till — Month</label>
+      <select id="projInvestedMonth" onchange="renderProjected()"><option value="">Whole Year</option></select>
+    </div>
+    <div>
+      <label>Projected Year</label>
+      <select id="projYear" onchange="renderProjected()"></select>
+    </div>
+    <div>
+      <label>Projected Month</label>
+      <select id="projMonth" onchange="renderProjected()">
+        <option value="3">March</option><option value="1">January</option><option value="2">February</option>
+        <option value="4">April</option><option value="5">May</option><option value="6">June</option>
+        <option value="7">July</option><option value="8">August</option><option value="9">September</option>
+        <option value="10">October</option><option value="11">November</option><option value="12">December</option>
+      </select>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <h2 id="projTableTitle">Lot-wise Projection</h2>
+  <div class="help">Each buy/dividend = a lot. Open = still growing at the assumed rate to your target date. Closed = that portion was sold, growth stops at sale (frozen value, no projection). Total Actual pulls the real NAV rate for that exact fund+year+month; shows a message if none exists.</div>
+  <table>
+    <thead><tr><th>Date</th><th>Units</th><th>Invested (₹)</th><th>Status</th><th>Elapsed (yrs)</th><th>Projected Value (₹)</th></tr></thead>
+    <tbody id="projBody"></tbody>
+  </table>
+  <div class="overviewGrid" style="margin-top:16px">
+    <div class="stat">
+      <div class="label">Total Projected Value (Open Lots)</div>
+      <div class="value" id="projTotalProjected">₹0.00</div>
+    </div>
+    <div class="stat">
+      <div class="label">Total Actual Value (as of same date)</div>
+      <div class="value" id="projTotalActual">₹0.00</div>
+    </div>
+  </div>
+</div>
+
+</div>
+
 <div id="modalOverlay" style="display:none;position:fixed;inset:0;background:rgba(74,66,55,0.35);align-items:center;justify-content:center;z-index:50">
   <div style="background:#fffdfa;border-radius:12px;padding:22px 24px;max-width:360px;box-shadow:0 6px 24px rgba(0,0,0,0.15)">
     <div id="modalMsg" style="font-size:14px;margin-bottom:16px;color:#4a4237"></div>
@@ -253,7 +324,7 @@ tr.fundrow:hover{background:var(--accent-soft)}
 </div>
 
 <script>
-let data = { transactions: [], navHistory: [], fundGroups: [] };
+let data = { transactions: [], navHistory: [], fundGroups: [], fundReturnRates: {} };
 const KEY = "mf_transactions";
 let expandedFund = null;
 let overviewExpandedFund = null;
@@ -263,8 +334,11 @@ let currentRole = 'edit';
 function switchTab(tab){
   document.getElementById('roleTabContent').style.display = tab==='role' ? 'block' : 'none';
   document.getElementById('fundsTabContent').style.display = tab==='funds' ? 'block' : 'none';
+  document.getElementById('projectedTabContent').style.display = tab==='projected' ? 'block' : 'none';
   document.getElementById('tabRoleBtn').classList.toggle('active', tab==='role');
   document.getElementById('tabFundsBtn').classList.toggle('active', tab==='funds');
+  document.getElementById('tabProjectedBtn').classList.toggle('active', tab==='projected');
+  if(tab==='projected'){ populateProjFundDropdown(); onProjFundChange(); }
 }
 
 function applyRoleVisibility(){
@@ -299,6 +373,7 @@ async function load(){
   }catch(e){ data = { transactions: [], navHistory: [] }; }
   if(!data.navHistory) data.navHistory = [];
   if(!data.fundGroups) data.fundGroups = [];
+  if(!data.fundReturnRates) data.fundReturnRates = {};
   data.transactions.forEach(t => { if(!t.id) t.id = genId(); });
   data.navHistory.forEach(n => { if(!n.id) n.id = genId(); });
   document.getElementById('txnDate').valueAsDate = new Date();
@@ -616,9 +691,10 @@ function portfolioValueAt(funds, dateStr, metric){
     if(metric === 'cost'){
       sum += unitsAndCostAsOf(f, dateStr).cost;
     } else {
-      const entries = data.navHistory.filter(n=>getFundKey(n)===f && n.date<=dateStr).sort((a,b)=>a.date.localeCompare(b.date));
+      const ym = dateStr.slice(0,7);
+      const entries = data.navHistory.filter(n=>getFundKey(n)===f && n.date.slice(0,7)===ym).sort((a,b)=>a.date.localeCompare(b.date));
       if(entries.length){
-        sum += unitsAndCostAsOf(f, dateStr).units * entries[entries.length-1].rate;
+        sum += unitsAndCostAsOf(f, entries[entries.length-1].date).units * entries[entries.length-1].rate;
       }
     }
   });
@@ -651,6 +727,10 @@ function renderTrend(){
   const metric = document.getElementById('trendMetric').value;
   const fund = document.getElementById('trendFund').value;
   const year = document.getElementById('trendYear').value;
+  if(metric === 'rate' && !fund){
+    document.getElementById('trendChartContainer').innerHTML = '<div style="color:var(--muted);font-size:13px">Select a fund to view its NAV rate trend.</div>';
+    return;
+  }
   const funds = fund ? [fund] : Array.from(new Set(data.transactions.map(t=>getFundKey(t))));
   let labels = [], values = [];
   if(year){
@@ -659,7 +739,7 @@ function renderTrend(){
       const lastDay = new Date(parseInt(year,10), m, 0).getDate();
       const dateStr = `${year}-${String(m).padStart(2,'0')}-${String(lastDay).padStart(2,'0')}`;
       labels.push(monthNames[m-1]);
-      values.push(portfolioValueAt(funds, dateStr, metric));
+      values.push(metric === 'rate' ? navRateAt(funds[0], dateStr) : portfolioValueAt(funds, dateStr, metric));
     }
   } else {
     const years = new Set();
@@ -667,10 +747,16 @@ function renderTrend(){
     data.navHistory.forEach(n=>years.add(n.date.slice(0,4)));
     Array.from(years).sort().forEach(y=>{
       labels.push(y);
-      values.push(portfolioValueAt(funds, `${y}-12-31`, metric));
+      values.push(metric === 'rate' ? navRateAt(funds[0], `${y}-12-31`) : portfolioValueAt(funds, `${y}-12-31`, metric));
     });
   }
   drawLineChart('trendChartContainer', labels, values);
+}
+
+function navRateAt(fund, dateStr){
+  const ym = dateStr.slice(0,7);
+  const entries = data.navHistory.filter(n=>getFundKey(n)===fund && n.date.slice(0,7)===ym).sort((a,b)=>a.date.localeCompare(b.date));
+  return entries.length ? entries[entries.length-1].rate : 0;
 }
 
 function renderNav(){
@@ -720,6 +806,176 @@ function renderNav(){
   renderTrend();
 }
 
+function populateProjFundDropdown(){
+  const sel = document.getElementById('projFund');
+  const current = sel.value;
+  const keys = Array.from(new Set(data.transactions.map(t=>getFundKey(t))));
+  sel.innerHTML = keys.map(k=>{
+    const d = getFundDisplay(k);
+    let label = d.name;
+    if(d.folio) label += ' (Folio: '+d.folio+')';
+    return `<option value="${k}">${label}</option>`;
+  }).join('');
+  if(keys.includes(current)) sel.value = current;
+}
+
+function getFundReturnRate(key){
+  return (data.fundReturnRates && data.fundReturnRates[key] !== undefined) ? data.fundReturnRates[key] : 12;
+}
+
+function saveProjRate(){
+  const key = document.getElementById('projFund').value;
+  if(!key) return;
+  const rate = parseFloat(document.getElementById('projRate').value);
+  if(!data.fundReturnRates) data.fundReturnRates = {};
+  data.fundReturnRates[key] = isNaN(rate) ? 12 : rate;
+  save();
+  renderProjected();
+}
+
+function onProjFundChange(){
+  const key = document.getElementById('projFund').value;
+  if(!key){ document.getElementById('projBody').innerHTML=''; return; }
+  document.getElementById('projRate').value = getFundReturnRate(key);
+
+  const txns = data.transactions.filter(t=>getFundKey(t)===key).sort((a,b)=>a.date.localeCompare(b.date));
+  const firstYear = txns.length ? parseInt(txns[0].date.slice(0,4),10) : new Date().getFullYear();
+  const currentYear = new Date().getFullYear();
+
+  const investedYearSel = document.getElementById('projInvestedYear');
+  const curIY = investedYearSel.value;
+  let iyHtml = '<option value="">Till Date (all transactions)</option>';
+  for(let y=firstYear; y<=currentYear; y++) iyHtml += `<option value="${y}">${y}</option>`;
+  investedYearSel.innerHTML = iyHtml;
+  investedYearSel.value = curIY || '';
+  onProjInvestedYearChange(true);
+
+  const projYearSel = document.getElementById('projYear');
+  const curPY = projYearSel.value;
+  let pyHtml = '<option value="today">Today</option>';
+  for(let y=firstYear; y<=currentYear+10; y++) pyHtml += `<option value="${y}">${y}</option>`;
+  projYearSel.innerHTML = pyHtml;
+  projYearSel.value = curPY || 'today';
+
+  renderProjected();
+}
+
+function onProjInvestedYearChange(skipRender){
+  const monthSel = document.getElementById('projInvestedMonth');
+  const curM = monthSel.value;
+  const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  let mHtml = '<option value="">Whole Year</option>';
+  monthNames.forEach((name,i)=> mHtml += `<option value="${i+1}">${name}</option>`);
+  monthSel.innerHTML = mHtml;
+  monthSel.value = curM || '';
+  if(!skipRender) renderProjected();
+}
+
+function computeFifoLots(fundKey, investedTillDate){
+  const txns = data.transactions
+    .filter(t=>getFundKey(t)===fundKey && (!investedTillDate || t.date<=investedTillDate))
+    .sort((a,b)=>a.date.localeCompare(b.date));
+  const lots = [];
+  txns.forEach(t=>{
+    if(t.type==='buy' || t.type==='dividend'){
+      lots.push({date:t.date, units:t.units, invested:t.total, remainingUnits:t.units, closures:[]});
+    } else if(t.type==='sell'){
+      let toSell = t.units;
+      for(const lot of lots){
+        if(toSell<=0) break;
+        if(lot.remainingUnits<=0) continue;
+        const take = Math.min(lot.remainingUnits, toSell);
+        lot.closures.push({units:take, sellDate:t.date});
+        lot.remainingUnits -= take;
+        toSell -= take;
+      }
+    }
+  });
+  return lots;
+}
+
+function projectedYearTargetDate(projYearValue){
+  if(projYearValue === 'today') return new Date().toISOString().slice(0,10);
+  const m = parseInt(document.getElementById('projMonth').value, 10);
+  const lastDay = new Date(parseInt(projYearValue,10), m, 0).getDate();
+  return `${projYearValue}-${String(m).padStart(2,'0')}-${String(lastDay).padStart(2,'0')}`;
+}
+
+function yearsBetween(startDate, endDate){
+  const ms = new Date(endDate) - new Date(startDate);
+  return ms / (1000*60*60*24*365.25);
+}
+
+function renderProjected(){
+  const monthSel = document.getElementById('projMonth');
+  monthSel.disabled = document.getElementById('projYear').value === 'today';
+  const key = document.getElementById('projFund').value;
+  const body = document.getElementById('projBody');
+  body.innerHTML = '';
+  document.getElementById('projTotalProjected').textContent = '₹0.00';
+  document.getElementById('projTotalActual').textContent = '₹0.00';
+  if(!key) return;
+
+  const investedYear = document.getElementById('projInvestedYear').value;
+  const investedMonth = document.getElementById('projInvestedMonth').value;
+  let investedTillDate = null;
+  if(investedYear){
+    if(investedMonth){
+      const lastDay = new Date(parseInt(investedYear,10), parseInt(investedMonth,10), 0).getDate();
+      investedTillDate = `${investedYear}-${String(investedMonth).padStart(2,'0')}-${String(lastDay).padStart(2,'0')}`;
+    } else {
+      investedTillDate = `${investedYear}-12-31`;
+    }
+  }
+
+  const projYearValue = document.getElementById('projYear').value;
+  const targetDate = projectedYearTargetDate(projYearValue);
+  const rate = getFundReturnRate(key);
+
+  const lots = computeFifoLots(key, investedTillDate);
+  let totalProjected = 0;
+
+  lots.forEach(lot=>{
+    const costPerUnit = lot.invested / lot.units;
+    if(targetDate < lot.date) return; // lot didn't exist yet as of this projected date
+    lot.closures.forEach(c=>{
+      const rowUnits = c.units;
+      const rowInvested = costPerUnit * rowUnits;
+      if(targetDate >= c.sellDate){
+        // sale had already happened as of the viewed date — frozen, no further growth
+        const elapsed = yearsBetween(lot.date, c.sellDate);
+        body.innerHTML += `<tr><td>${lot.date}</td><td>${rowUnits.toFixed(3)}</td><td>${rowInvested.toFixed(2)}</td><td>Closed (sold ${c.sellDate})</td><td>${elapsed.toFixed(2)}</td><td>-</td></tr>`;
+      } else {
+        // as of the viewed date, this tranche hadn't been sold yet — still growing
+        const elapsed = yearsBetween(lot.date, targetDate);
+        const projectedValue = rowInvested * Math.pow(1 + rate/100, elapsed);
+        totalProjected += projectedValue;
+        body.innerHTML += `<tr><td>${lot.date}</td><td>${rowUnits.toFixed(3)}</td><td>${rowInvested.toFixed(2)}</td><td>Open (sold later on ${c.sellDate})</td><td>${elapsed.toFixed(2)}</td><td>${projectedValue.toFixed(2)}</td></tr>`;
+      }
+    });
+    if(lot.remainingUnits > 0){
+      const rowInvested = costPerUnit * lot.remainingUnits;
+      const elapsed = yearsBetween(lot.date, targetDate);
+      const projectedValue = rowInvested * Math.pow(1 + rate/100, elapsed);
+      totalProjected += projectedValue;
+      body.innerHTML += `<tr><td>${lot.date}</td><td>${lot.remainingUnits.toFixed(3)}</td><td>${rowInvested.toFixed(2)}</td><td>Open</td><td>${elapsed.toFixed(2)}</td><td>${projectedValue.toFixed(2)}</td></tr>`;
+    }
+  });
+
+  document.getElementById('projTotalProjected').textContent = '₹' + totalProjected.toFixed(2);
+
+  const targetYm = targetDate.slice(0,7);
+  const navEntries = data.navHistory.filter(n=>getFundKey(n)===key && n.date.slice(0,7)===targetYm).sort((a,b)=>a.date.localeCompare(b.date));
+  if(navEntries.length){
+    const entry = navEntries[navEntries.length-1];
+    const actualUnits = unitsAndCostAsOf(key, entry.date).units;
+    const actualValue = actualUnits * entry.rate;
+    document.getElementById('projTotalActual').textContent = '₹' + actualValue.toFixed(2);
+  } else {
+    document.getElementById('projTotalActual').textContent = 'No NAV entry for this fund/period';
+  }
+}
+
 function render(){
   const summary = computeSummary(data.transactions);
   const tbody = document.querySelector('#summaryTable tbody');
@@ -759,6 +1015,7 @@ function render(){
   renderNav();
   populateFundChangeDropdown();
   renderFundChangeLog();
+  populateProjFundDropdown();
   applyRoleVisibility();
 }
 
