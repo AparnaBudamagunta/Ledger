@@ -188,7 +188,7 @@ tr.fundrow:hover{background:var(--accent-soft)}
   <h2>NAV History &amp; Valuation</h2>
   <div class="help">One row per fund (latest rate). Click to expand full rate history. Current Value = units × rate; P&amp;L = value vs. cost as of that date.</div>
   <table>
-    <thead><tr><th>Fund</th><th>Folio</th><th>ISIN</th><th>Latest Date</th><th>Latest Rate (₹)</th><th>Units</th><th>Avg Cost/Unit (₹)</th><th>Current Value (₹)</th><th>Cost Price (₹)</th><th>P&amp;L per Unit (₹)</th><th>P&amp;L Total (₹)</th></tr></thead>
+    <thead><tr><th>Fund</th><th>Folio</th><th>ISIN</th><th>Latest Date</th><th>Latest Rate (₹)</th><th>Units</th><th>Avg Cost/Unit (₹)</th><th>Current Value (₹)</th><th>Cost Price (₹)</th><th>Current Amount Invested (₹)</th><th>P&amp;L per Unit (₹)</th><th>P&amp;L Total (₹)</th></tr></thead>
     <tbody id="navBody"></tbody>
   </table>
 </div>
@@ -197,7 +197,7 @@ tr.fundrow:hover{background:var(--accent-soft)}
   <h2>Holdings Summary (click a fund for history)</h2>
   <div class="help">All-time totals per fund, regardless of date. Click a row to see every transaction for that fund.</div>
   <table id="summaryTable">
-    <thead><tr><th>Fund</th><th>Folio</th><th>ISIN</th><th>Total Purchased Units</th><th>Total Sold Units</th><th>Total Cost Price (₹)</th><th>Total Sold Price (₹)</th></tr></thead>
+    <thead><tr><th>Fund</th><th>Folio</th><th>ISIN</th><th>Total Purchased Units</th><th>Total Sold Units</th><th>Total Cost Price (₹)</th><th>Current Amount Invested (₹)</th><th>Total Sold Price (₹)</th></tr></thead>
     <tbody></tbody>
   </table>
 </div>
@@ -245,7 +245,7 @@ tr.fundrow:hover{background:var(--accent-soft)}
     </div>
   </div>
   <table style="margin-top:16px">
-    <thead><tr><th>Fund</th><th>Folio</th><th>ISIN</th><th>Purchased Units</th><th>Sold Units</th><th>Cost Price (₹)</th><th>Sold Price (₹)</th></tr></thead>
+    <thead><tr><th>Fund</th><th>Folio</th><th>ISIN</th><th>Purchased Units</th><th>Sold Units</th><th>Cost Price (₹)</th><th>Current Amount Invested (₹)</th><th>Sold Price (₹)</th></tr></thead>
     <tbody id="overviewFundBody"></tbody>
   </table>
 </div>
@@ -697,6 +697,9 @@ function renderOverview(){
   let txns = data.transactions;
   if(year) txns = txns.filter(t => t.date.slice(0,4) === year);
   if(month) txns = txns.filter(t => parseInt(t.date.slice(5,7),10) === parseInt(month,10));
+  let cutoffDate = new Date().toISOString().slice(0,10);
+  if(year && month){ const ld = new Date(parseInt(year,10), parseInt(month,10), 0).getDate(); cutoffDate = `${year}-${String(month).padStart(2,'0')}-${String(ld).padStart(2,'0')}`; }
+  else if(year){ cutoffDate = `${year}-12-31`; }
   let cost = 0, sold = 0;
   txns.forEach(t=>{
     if(t.type === 'buy' || t.type === 'dividend') cost += t.total;
@@ -713,7 +716,8 @@ function renderOverview(){
     const disp = getFundDisplay(key);
     const tr = document.createElement('tr');
     tr.className = 'fundrow';
-    tr.innerHTML = `<td>${disp.name}</td><td>${disp.folio||'-'}</td><td>${disp.isin||'-'}</td><td>${s.purchasedUnits.toFixed(3)}</td><td>${s.soldUnits.toFixed(3)}</td><td>${s.costPrice.toFixed(2)}</td><td>${s.soldPrice.toFixed(2)}</td>`;
+    const curInv = currentInvestedAsOf(key, cutoffDate).invested;
+    tr.innerHTML = `<td>${disp.name}</td><td>${disp.folio||'-'}</td><td>${disp.isin||'-'}</td><td>${s.purchasedUnits.toFixed(3)}</td><td>${s.soldUnits.toFixed(3)}</td><td>${s.costPrice.toFixed(2)}</td><td>${curInv.toFixed(2)}</td><td>${s.soldPrice.toFixed(2)}</td>`;
     tr.onclick = () => { overviewExpandedFund = (overviewExpandedFund === key) ? null : key; renderOverview(); };
     body.appendChild(tr);
     if(overviewExpandedFund === key){
@@ -926,13 +930,14 @@ function renderNav(){
     const plColor = plTotal >= 0 ? '#2e7d32' : '#c62828';
     const tr = document.createElement('tr');
     tr.className = 'fundrow';
-    tr.innerHTML = `<td>${disp.name}</td><td>${disp.folio||'-'}</td><td>${disp.isin||'-'}</td><td>${latest.date}</td><td>${latest.rate.toFixed(2)}</td><td>${units.toFixed(3)}</td><td>${avgCost.toFixed(2)}</td><td style="color:${color};font-weight:600">${value.toFixed(2)}</td><td>${cost.toFixed(2)}</td><td style="color:${plColor};font-weight:600">${plUnit.toFixed(2)}</td><td style="color:${plColor};font-weight:600">${plTotal.toFixed(2)}</td>`;
+    const curInv = currentInvestedAsOf(fund, latest.date).invested;
+    tr.innerHTML = `<td>${disp.name}</td><td>${disp.folio||'-'}</td><td>${disp.isin||'-'}</td><td>${latest.date}</td><td>${latest.rate.toFixed(2)}</td><td>${units.toFixed(3)}</td><td>${avgCost.toFixed(2)}</td><td style="color:${color};font-weight:600">${value.toFixed(2)}</td><td>${cost.toFixed(2)}</td><td>${curInv.toFixed(2)}</td><td style="color:${plColor};font-weight:600">${plUnit.toFixed(2)}</td><td style="color:${plColor};font-weight:600">${plTotal.toFixed(2)}</td>`;
     tr.onclick = () => { navExpandedFund = (navExpandedFund === fund) ? null : fund; renderNav(); };
     body.appendChild(tr);
     if(navExpandedFund === fund){
       const trh = document.createElement('tr');
       trh.className = 'history';
-      let h = `<table style="width:100%"><thead><tr><th>Date</th><th>Rate (₹)</th><th>Units</th><th>Avg Cost/Unit (₹)</th><th>Current Value (₹)</th><th>Cost Price (₹)</th><th>P&amp;L per Unit (₹)</th><th>P&amp;L Total (₹)</th><th class="edit-only">Action</th></tr></thead><tbody>`;
+      let h = `<table style="width:100%"><thead><tr><th>Date</th><th>Rate (₹)</th><th>Units</th><th>Avg Cost/Unit (₹)</th><th>Current Value (₹)</th><th>Cost Price (₹)</th><th>Current Amount Invested (₹)</th><th>P&amp;L per Unit (₹)</th><th>P&amp;L Total (₹)</th><th class="edit-only">Action</th></tr></thead><tbody>`;
       entries.forEach(n=>{
         const uc = unitsAndCostAsOf(fund, n.date);
         const v = uc.units * n.rate;
@@ -941,11 +946,12 @@ function renderNav(){
         const plU = n.rate - avgC;
         const plT = v - uc.cost;
         const plC = plT >= 0 ? '#2e7d32' : '#c62828';
-        h += `<tr><td style="text-align:left">${n.date}</td><td>${n.rate.toFixed(2)}</td><td>${uc.units.toFixed(3)}</td><td>${avgC.toFixed(2)}</td><td style="color:${c};font-weight:600">${v.toFixed(2)}</td><td>${uc.cost.toFixed(2)}</td><td style="color:${plC};font-weight:600">${plU.toFixed(2)}</td><td style="color:${plC};font-weight:600">${plT.toFixed(2)}</td><td class="edit-only"><button class="small edit-only" style="margin:0;color:#a13a3a" onclick="event.stopPropagation();deleteNav('${n.id}')">Delete</button></td></tr>`;
+        const curInvN = currentInvestedAsOf(fund, n.date).invested;
+        h += `<tr><td style="text-align:left">${n.date}</td><td>${n.rate.toFixed(2)}</td><td>${uc.units.toFixed(3)}</td><td>${avgC.toFixed(2)}</td><td style="color:${c};font-weight:600">${v.toFixed(2)}</td><td>${uc.cost.toFixed(2)}</td><td>${curInvN.toFixed(2)}</td><td style="color:${plC};font-weight:600">${plU.toFixed(2)}</td><td style="color:${plC};font-weight:600">${plT.toFixed(2)}</td><td class="edit-only"><button class="small edit-only" style="margin:0;color:#a13a3a" onclick="event.stopPropagation();deleteNav('${n.id}')">Delete</button></td></tr>`;
       });
       h += '</tbody></table>';
       const td = document.createElement('td');
-      td.colSpan = 11;
+      td.colSpan = 12;
       td.innerHTML = h;
       trh.appendChild(td);
       body.appendChild(trh);
@@ -1239,6 +1245,19 @@ function renderDecisions(){
   applyRoleVisibility();
 }
 
+function currentInvestedAsOf(fundKey, date){
+  const lots = computeFifoLots(fundKey, date);
+  let units = 0, invested = 0;
+  lots.forEach(lot=>{
+    if(lot.remainingUnits > 0){
+      const costPerUnit = lot.invested / lot.units;
+      units += lot.remainingUnits;
+      invested += costPerUnit * lot.remainingUnits;
+    }
+  });
+  return {units, invested};
+}
+
 function render(){
   const summary = computeSummary(data.transactions);
   const tbody = document.querySelector('#summaryTable tbody');
@@ -1248,7 +1267,8 @@ function render(){
     const disp = getFundDisplay(fund);
     const trFund = document.createElement('tr');
     trFund.className = 'fundrow';
-    trFund.innerHTML = `<td>${disp.name}</td><td>${disp.folio||'-'}</td><td>${disp.isin||'-'}</td><td>${s.purchasedUnits.toFixed(3)}</td><td>${s.soldUnits.toFixed(3)}</td><td>${s.costPrice.toFixed(2)}</td><td>${s.soldPrice.toFixed(2)}</td>`;
+    const curInv = currentInvestedAsOf(fund, new Date().toISOString().slice(0,10)).invested;
+    trFund.innerHTML = `<td>${disp.name}</td><td>${disp.folio||'-'}</td><td>${disp.isin||'-'}</td><td>${s.purchasedUnits.toFixed(3)}</td><td>${s.soldUnits.toFixed(3)}</td><td>${s.costPrice.toFixed(2)}</td><td>${curInv.toFixed(2)}</td><td>${s.soldPrice.toFixed(2)}</td>`;
     trFund.onclick = () => { expandedFund = (expandedFund === fund) ? null : fund; render(); };
     tbody.appendChild(trFund);
 
