@@ -57,6 +57,7 @@ tr.fundrow:hover{background:var(--accent-soft)}
   <div class="tab active" id="tabRoleBtn" onclick="switchTab('role')">Role</div>
   <div class="tab" id="tabFundsBtn" onclick="switchTab('funds')">Mutual Funds</div>
   <div class="tab" id="tabProjectedBtn" onclick="switchTab('projected')">Mutual Funds Projected</div>
+  <div class="tab" id="tabDecisionBtn" onclick="switchTab('decision')">Decision Tracker</div>
 </div>
 
 <div id="roleTabContent" class="card">
@@ -334,6 +335,53 @@ tr.fundrow:hover{background:var(--accent-soft)}
 
 </div>
 
+<div id="decisionTabContent" style="display:none">
+<div class="card edit-only">
+  <h2 id="decisionFormTitle">Add Decision</h2>
+  <div class="help">Log any financial decision — a thought, a to-do, or something already done. Marking a Mutual Fund decision "Done" hands you off to Add Transaction, prefilled.</div>
+  <div class="row">
+    <div>
+      <label>Instrument Type</label>
+      <select id="decType" onchange="onDecTypeChange()">
+        <option value="mf">Mutual Fund</option><option value="stock">Stock</option>
+        <option value="rd">RD</option><option value="fd">FD</option>
+      </select>
+    </div>
+    <div>
+      <label>Instrument</label>
+      <select id="decInstrumentSelect" onchange="onDecInstrumentSelectChange()"></select>
+      <input id="decInstrumentText" style="display:none" placeholder="e.g. TCS, HDFC RD">
+    </div>
+    <div>
+      <label>Activity</label>
+      <select id="decActivity"><option>Buy</option><option>Sell</option><option>Hold</option><option>Switch</option><option>Other</option></select>
+    </div>
+    <div>
+      <label>Status</label>
+      <select id="decStatus" onchange="onDecStatusChange()"><option>To-do</option><option>Just a Thought</option><option>Done</option></select>
+    </div>
+    <div id="decDateWrap" style="display:none">
+      <label>Date</label>
+      <input id="decDate" type="date">
+    </div>
+    <div>
+      <label>Reasoning</label>
+      <input id="decReasoning" placeholder="Why this decision?">
+    </div>
+  </div>
+  <button id="decSubmitBtn" onclick="saveDecision()">Save Decision</button>
+  <button id="decCancelBtn" class="small" style="display:none;margin-left:8px" onclick="cancelDecisionEdit()">Cancel Edit</button>
+</div>
+
+<div class="card">
+  <h2>Decisions</h2>
+  <table>
+    <thead><tr><th>Type</th><th>Instrument</th><th>Activity</th><th>Status</th><th>Date</th><th>Reasoning</th><th class="edit-only">Action</th></tr></thead>
+    <tbody id="decisionBody"></tbody>
+  </table>
+</div>
+</div>
+
 <div id="modalOverlay" style="display:none;position:fixed;inset:0;background:rgba(74,66,55,0.35);align-items:center;justify-content:center;z-index:50">
   <div style="background:#fffdfa;border-radius:12px;padding:22px 24px;max-width:360px;box-shadow:0 6px 24px rgba(0,0,0,0.15)">
     <div id="modalMsg" style="font-size:14px;margin-bottom:16px;color:#4a4237"></div>
@@ -342,7 +390,7 @@ tr.fundrow:hover{background:var(--accent-soft)}
 </div>
 
 <script>
-let data = { transactions: [], navHistory: [], fundGroups: [], fundReturnRates: {}, transactionEditLog: [] };
+let data = { transactions: [], navHistory: [], fundGroups: [], fundReturnRates: {}, transactionEditLog: [], decisions: [] };
 const KEY = "mf_transactions";
 let expandedFund = null;
 let editingTxnId = null;
@@ -354,10 +402,13 @@ function switchTab(tab){
   document.getElementById('roleTabContent').style.display = tab==='role' ? 'block' : 'none';
   document.getElementById('fundsTabContent').style.display = tab==='funds' ? 'block' : 'none';
   document.getElementById('projectedTabContent').style.display = tab==='projected' ? 'block' : 'none';
+  document.getElementById('decisionTabContent').style.display = tab==='decision' ? 'block' : 'none';
   document.getElementById('tabRoleBtn').classList.toggle('active', tab==='role');
   document.getElementById('tabFundsBtn').classList.toggle('active', tab==='funds');
   document.getElementById('tabProjectedBtn').classList.toggle('active', tab==='projected');
+  document.getElementById('tabDecisionBtn').classList.toggle('active', tab==='decision');
   if(tab==='projected'){ populateProjFundDropdown(); onProjFundChange(); }
+  if(tab==='decision'){ populateDecFundDropdown(); renderDecisions(); }
 }
 
 function applyRoleVisibility(){
@@ -394,6 +445,7 @@ async function load(){
   if(!data.fundGroups) data.fundGroups = [];
   if(!data.fundReturnRates) data.fundReturnRates = {};
   if(!data.transactionEditLog) data.transactionEditLog = [];
+  if(!data.decisions) data.decisions = [];
   data.transactions.forEach(t => { if(!t.id) t.id = genId(); });
   data.navHistory.forEach(n => { if(!n.id) n.id = genId(); });
   document.getElementById('txnDate').valueAsDate = new Date();
@@ -1074,6 +1126,119 @@ function renderProjected(){
   }
 }
 
+let editingDecId = null;
+
+function populateDecFundDropdown(){
+  const sel = document.getElementById('decInstrumentSelect');
+  const cur = sel.value;
+  const keys = Array.from(new Set(data.transactions.map(t=>getFundKey(t))));
+  sel.innerHTML = '<option value="__new__">+ New Fund (not in portfolio yet)</option>' + keys.map(k=>`<option value="${k}">${getFundDisplay(k).name}</option>`).join('');
+  if(keys.includes(cur)) sel.value = cur;
+  onDecInstrumentSelectChange();
+}
+
+function onDecInstrumentSelectChange(){
+  const isNew = document.getElementById('decInstrumentSelect').value === '__new__';
+  document.getElementById('decInstrumentText').style.display = isNew ? '' : 'none';
+  if(isNew) document.getElementById('decInstrumentText').placeholder = 'Type new fund name';
+}
+
+function onDecTypeChange(){
+  const isMf = document.getElementById('decType').value === 'mf';
+  document.getElementById('decInstrumentSelect').style.display = isMf ? '' : 'none';
+  if(isMf) onDecInstrumentSelectChange();
+  else document.getElementById('decInstrumentText').style.display = '';
+}
+
+function onDecStatusChange(){
+  document.getElementById('decDateWrap').style.display = document.getElementById('decStatus').value === 'Done' ? 'block' : 'none';
+}
+
+function saveDecision(){
+  const type = document.getElementById('decType').value;
+  const isMf = type === 'mf';
+  const isNewFund = isMf && document.getElementById('decInstrumentSelect').value === '__new__';
+  const instrument = (isMf && !isNewFund) ? document.getElementById('decInstrumentSelect').value : document.getElementById('decInstrumentText').value.trim();
+  const activity = document.getElementById('decActivity').value;
+  const status = document.getElementById('decStatus').value;
+  const date = status === 'Done' ? (document.getElementById('decDate').value || new Date().toISOString().slice(0,10)) : '';
+  const reasoning = document.getElementById('decReasoning').value.trim();
+  if(!instrument){ showModal('Please select/enter an instrument.', [{label:'OK', onClick:()=>{}}]); return; }
+
+  let rec;
+  if(editingDecId){
+    rec = data.decisions.find(d=>d.id===editingDecId);
+    Object.assign(rec, {type, instrument, activity, status, date, reasoning});
+  } else {
+    rec = {id: genId(), type, instrument, activity, status, date, reasoning};
+    data.decisions.push(rec);
+  }
+  save();
+  cancelDecisionEdit();
+  renderDecisions();
+
+  if(isMf && status === 'Done'){
+    const disp = getFundDisplay(instrument);
+    switchTab('funds');
+    document.getElementById('fundName').value = disp.name;
+    document.getElementById('folioNumber').value = disp.folio || '';
+    document.getElementById('isinNumber').value = disp.isin || '';
+    document.getElementById('txnType').value = (activity==='Sell') ? 'sell' : 'buy';
+    document.getElementById('txnDate').value = date;
+    document.getElementById('txnNote').value = 'From decision: ' + reasoning;
+    updateLabels();
+    showModal('Decision saved. Review/complete the prefilled transaction below and click Add.', [{label:'OK', onClick:()=>{}}]);
+  }
+}
+
+function editDecision(id){
+  const d = data.decisions.find(x=>x.id===id);
+  if(!d) return;
+  editingDecId = id;
+  document.getElementById('decType').value = d.type;
+  onDecTypeChange();
+  populateDecFundDropdown();
+  if(d.type==='mf'){
+    const keys = Array.from(new Set(data.transactions.map(t=>getFundKey(t))));
+    if(keys.includes(d.instrument)){ document.getElementById('decInstrumentSelect').value = d.instrument; onDecInstrumentSelectChange(); }
+    else { document.getElementById('decInstrumentSelect').value = '__new__'; onDecInstrumentSelectChange(); document.getElementById('decInstrumentText').value = d.instrument; }
+  }
+  else document.getElementById('decInstrumentText').value = d.instrument;
+  document.getElementById('decActivity').value = d.activity;
+  document.getElementById('decStatus').value = d.status;
+  onDecStatusChange();
+  document.getElementById('decDate').value = d.date || '';
+  document.getElementById('decReasoning').value = d.reasoning || '';
+  document.getElementById('decSubmitBtn').textContent = 'Update Decision';
+  document.getElementById('decCancelBtn').style.display = 'inline-block';
+}
+
+function cancelDecisionEdit(){
+  editingDecId = null;
+  document.getElementById('decInstrumentText').value = '';
+  document.getElementById('decReasoning').value = '';
+  document.getElementById('decSubmitBtn').textContent = 'Save Decision';
+  document.getElementById('decCancelBtn').style.display = 'none';
+}
+
+function deleteDecision(id){
+  showModal('Delete this decision entry?', [
+    {label:'Cancel', secondary:true, onClick:()=>{}},
+    {label:'Delete', onClick:()=>{ data.decisions = data.decisions.filter(d=>d.id!==id); save(); renderDecisions(); }}
+  ]);
+}
+
+function renderDecisions(){
+  const body = document.getElementById('decisionBody');
+  if(!body) return;
+  body.innerHTML = '';
+  data.decisions.forEach(d=>{
+    const name = d.type==='mf' ? getFundDisplay(d.instrument).name : d.instrument;
+    body.innerHTML += `<tr><td>${d.type.toUpperCase()}</td><td>${name}</td><td>${d.activity}</td><td>${d.status}</td><td>${d.date||'-'}</td><td style="text-align:left">${d.reasoning||'-'}</td><td class="edit-only"><button class="small edit-only" style="margin:0 4px 0 0" onclick="editDecision('${d.id}')">Edit</button><button class="small edit-only" style="margin:0;color:#a13a3a" onclick="deleteDecision('${d.id}')">Delete</button></td></tr>`;
+  });
+  applyRoleVisibility();
+}
+
 function render(){
   const summary = computeSummary(data.transactions);
   const tbody = document.querySelector('#summaryTable tbody');
@@ -1115,6 +1280,7 @@ function render(){
   renderFundChangeLog();
   renderTxnEditLog();
   populateProjFundDropdown();
+  populateDecFundDropdown();
   applyRoleVisibility();
 }
 
